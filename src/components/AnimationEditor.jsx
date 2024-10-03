@@ -3,7 +3,7 @@ import { useState } from "react";
 
 export const AnimationEditor = () => {
 
-    const { setAnimationState, setVideoState, videoState} = usePlayer();
+    const { setAnimationState, setVideoState, videoState,currentSceneIndex,setCurrentSceneIndex,updateAnimationState} = usePlayer();
 
     const startAnimation = () => {
         setPlaying(true);
@@ -31,7 +31,14 @@ export const AnimationEditor = () => {
           setVideoState("Paused")
         }}>Pause</button>
         <button onClick={() => {
-          setVideoState("Reset")
+          setVideoState("Reset");
+          if(currentSceneIndex)
+            {
+              setCurrentSceneIndex(0);
+            }
+            else{
+            updateAnimationState(0,0,0);
+            }
         }}>Reset</button>
     <form>
       <h3>Select View</h3>

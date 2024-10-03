@@ -10,14 +10,17 @@ import { Avatar } from "../Avatar";
 import gsap from "gsap";
 import {useGSAP} from "@gsap/react";
 import { usePlayer } from "../../hooks/usePlayer";
+import { FemaleAvatar } from "../FemaleAvatar";
+import {twoSpeakersPodcastProject} from "../../data/projectData"
 
 // <group position={[positionX,positionY,positionZ]} rotation={[rotationX,rotationY,rotationZ]}>
 
 export const Podcast2 = () => {
 
-    const {animationState, projectData} = usePlayer();
+    const {animationState} = usePlayer();
+    const projectData = twoSpeakersPodcastProject;
 
-    const sceneConfiguration = sceneConfig.podcast[projectData.sceneType];
+    const sceneConfiguration = sceneConfig.podcast["couchPodcast"];
     const speakers = projectData.speakers;
 
     const {scene : livingRoomScene } = useGLTF(`models/${sceneConfiguration.sceneName}.glb`);
@@ -65,11 +68,11 @@ export const Podcast2 = () => {
         <primitive object={livingRoomScene}/>
         {
           speakers.map( (speaker,index) =>
-            <Avatar avatarName = {speaker.name} isSitting  
+            <Avatar avatarType={"avatar"} avatarName = {speaker.name} isSitting  
                     position={sceneConfiguration.modelPositions[index].position} 
                     rotation={sceneConfiguration.modelPositions[index].rotation}/>
-          )
-        }
+          )  
+        } 
       </group>
 
       

@@ -6,7 +6,9 @@ import { useControls } from 'leva'
 import * as THREE from 'three'
 import faceExpressions from '../data/FaceExpressionConfig'
 import { usePlayer } from '../hooks/usePlayer'
-import audioData from '../data/AudioData';
+import gsap from "gsap";
+import {useGSAP} from "@gsap/react";
+//import audioData from '../data/storyAudioData';
 
 const corresponding = {
   A: "viseme_PP",
@@ -25,15 +27,18 @@ export function Avatar(props) {
 
   const { camera } = useThree();
   
-  const {avatarName, isSitting, ...prop} = props;
+  const {avatarName, isSitting, targetPosition,avatarType,charCoord, ...prop} = props;
 
-  const { scene } = useGLTF('models/avatar.glb');
+  
+
+  const { scene } = useGLTF(`models/${avatarType}.glb`);
   const clone = React.useMemo(() => SkeletonUtils.clone(scene), [scene]);
   const { nodes, materials } = useGraph(clone);
 
   const avatarRef = useRef();
-  const {animations : avatarAnimation} = useGLTF('animations/avatarSittingAnimation.glb');
-  const {animations : avatarPose} = useGLTF('animations/avatarPose.glb');
+  const animationType = isSitting ? 'SittingAnimation' : 'Animation'
+  const {animations : avatarAnimation} = useGLTF(isSitting?`animations/${avatarType}SittingAnimation.glb`:`animations/${avatarType}Animation.glb`);
+  const {animations : avatarPose} = useGLTF(`animations/${avatarType}Pose.glb`);
 
   const [blink,setBlink] = useState(false);
 
@@ -46,11 +51,30 @@ export function Avatar(props) {
   const [animationNumber,setAnimationNumber] = useState(0);
   const [lipsync,setLipsync] = useState(undefined);
   const audio = useRef(null);
+  const avatarFaceExpression = useRef(null);
+  const avatarLipSync = useRef(null);
 
-  const {script, animationState,setAnimationState, next, videoState, setVideoState,getScript} = usePlayer();
+  const {script, animationState,setAnimationState, next, videoState, setVideoState,currentAudioData,setCurrentSceneIndex,currentSceneIndex,setCurrentSceneScript,characterLook,updateAnimationState,avatarVisibility} = usePlayer();
 
-  const {actions, mixer} = useAnimations(avatarAnimation,avatarRef)
+  const {actions, mixer,names} = useAnimations(avatarAnimation,avatarRef)
   const {actions : pose, mixer : poseSetup} = useAnimations(avatarPose, avatarRef);
+
+
+  // look logic
+
+  const avatarLookPosition = useRef([0,0,1.5]);
+
+  useGSAP(() => {
+    const requiredLookPosition = (characterLook == "Character")?charCoord:[0,0,1.5];
+
+    gsap.to(avatarLookPosition.current, {
+      0: requiredLookPosition[0],
+      1: requiredLookPosition[1],
+      2: requiredLookPosition[2],
+      duration: 1,
+      overwrite: 'auto'
+    });
+  },[characterLook])
 
 
   const moveMorphTarget = (target, value, speed = 0.1) => {
@@ -76,9 +100,17 @@ export function Avatar(props) {
   //useFrame
   useFrame((state,delta)=> {
 
-    if(videoState === "Paused")
-    {
-      setBlink(false);
+    // if(videoState === "Paused")
+    // {
+    //   setBlink(false);
+    // }
+
+    if(videoState === "Paused"){
+        mixer.timeScale = 0;
+        setBlink(false);
+    }
+    if(avatarLookPosition.current != undefined){
+    avatarRef.current.getObjectByName('Head').lookAt(...avatarLookPosition.current)
     }
 
     const faceExpressionConfiguration = faceExpressions[currentFaceExpression];
@@ -126,36 +158,38 @@ export function Avatar(props) {
 
     if(videoState == "Paused")
     {
+        mixer.timeScale = 0;
+       
       if(audio.current === null || audio.current === undefined)
       {
          return;
       }
       audio.current.pause();
-      actions[currentAnimation].stop();
-      if(isSitting){
-        pose['Sitting'].play();
-      }
-      else{
-        pose['Idle'].play();
-      }
-      setLipsync(undefined);
-      setCurrentFaceExpression('Neutral');
     }
 
     if(videoState == "Playing")
     {
-      setAnimationState((animationState) => ({...animationState, isplaying : true}))
+      mixer.timeScale=1;
+      if(audio.current === null || audio.current === undefined)
+        {
+           return;
+        }
+
+      audio.current.play();
       return;
     }
 
     if(videoState == "Reset")
     {
-      if(audio.current != null && audio.current != undefined)
+      mixer.stopAllAction();
+      if(audio.current === null || audio.current === undefined)
         {
-          audio.current.pause();
+           return;
         }
-      getScript();
-      setAnimationState((animationState) => ({...animationState, isplaying : true}));
+
+
+      audio.current.pause();
+      setVideoState("Paused");
     }
 
   },[videoState])
@@ -163,70 +197,37 @@ export function Avatar(props) {
 
   useEffect(()=> {
 
-    if(animationState.isplaying === false)
+    if(animationState === undefined || !currentAnimation || !animationNumber)
     {
-        return;
+      return;
     }
 
     poseSetup.stopAllAction();
-
-    if(!currentAnimation || !animationNumber)
-    {
-      return;
-    }
-
     const action = actions[currentAnimation];
-    if(action === undefined)
-    {
-      return;
-    }
-    //action.setLoop(loopType, 1);
-    //action.clampWhenFinished = true;
+    if(action === undefined) return;
 
-    // const onAnimationFinished = () => {
-    //   console.log('Animation finished ' + currentAnimation + ' AN '+animationNumber);
-    //    if(animationState.currentSpeakers === avatarName)
-    //    {
-    //       console.log("Next");
-    //       next();
-    //    }
-    // }
+
     console.log("speaker " + avatarName + " AN " + animationNumber)
     console.log("previous Animation: " + previousAnimation);
     console.log("Current Animation: " + currentAnimation);
     console.log("Next Animation: " + nextAnimation);
-
-    var fadeInTime = 0.4;
-    if(currentAnimation === previousAnimation)
-    {
-        fadeInTime = 0;
-    }
-
-    //mixer.addEventListener('finished', onAnimationFinished);
-    if(currentAnimation != nextAnimation){
-      action.reset().fadeIn(fadeInTime).play();
-   }
-   else{
-    action.reset().play();
-   }
-
-    return() => {
-      if(currentAnimation != nextAnimation){
-         action.fadeOut(0.4);
+    
+    if(currentAnimation != previousAnimation){
+      action.reset().fadeIn(0.5).play();
       }
-     // mixer.removeEventListener('finished', onAnimationFinished);
+
+    return () => {
+      //It gets value of previous render itself
+      if(currentAnimation != nextAnimation){
+        action.fadeOut(0.5);
+      }
     }
+
   },[animationNumber]);
 
 
    useEffect(()=> {
 
-    if(isSitting){
-      pose['Sitting'].play();
-    }
-    else{
-      pose['Idle'].play();
-    }
 
     if(animationState === undefined)
     {
@@ -236,6 +237,10 @@ export function Avatar(props) {
     if(!(animationState.currentSpeakers === avatarName))
     {
       console.log("returning for "+avatarName);
+      if(currentAnimation == 'Idle')
+      {
+        setPreviousAnimation('Idle');
+      }
       setCurrentAnimation('Idle');
       setNextAnimation('Idle');
       setAnimationNumber(animationNumber+1);
@@ -245,35 +250,46 @@ export function Avatar(props) {
       return;
     }
 
-    const animationToPlay = animationState.currentDialogs[animationState.currentDialogIndex].Animation;
-    const avatarFaceExpression = animationState.currentDialogs[animationState.currentDialogIndex].FaceExpression;
-    var nextAnimationToPlay = 'Idle';
+    if(animationState.currentDialogIndex == 0 && currentSceneIndex == 0)
+    {
 
-    if(animationState.currentDialogsLength > (animationState.currentDialogIndex + 1)){
-       nextAnimationToPlay = animationState.currentDialogs[animationState.currentDialogIndex + 1].Animation;
     }
 
-    console.log('Speaker Script Animation ' + avatarName);
-    console.log('animationToPlay');
-    console.log(animationToPlay);
-    console.log('NextAnimationToPlay');
-    console.log(nextAnimationToPlay);
-    console.log('currentFaceExpression');
-    console.log(avatarFaceExpression);
+    const animationToPlay = animationState.currentDialogs[animationState.currentDialogIndex].animation;
+    var nextAnimationToPlay = 'Idle';
+    if(animationState.currentDialogsLength > (animationState.currentDialogIndex + 1)){
+       nextAnimationToPlay = animationState.currentDialogs[animationState.currentDialogIndex + 1].animation;
+    }
+
+    // console.log('Speaker Script Animation ' + avatarName);
+    // console.log('animationToPlay');
+    // console.log(animationToPlay);
+    // console.log('NextAnimationToPlay');
+    // console.log(nextAnimationToPlay);
+    // console.log('currentFaceExpression');
+    // console.log(avatarFaceExpression);
 
     setPreviousAnimation(currentAnimation);
     setCurrentAnimation(animationToPlay);
     setNextAnimation(nextAnimationToPlay);
     setAnimationNumber(animationNumber + 1);
-    setCurrentFaceExpression(avatarFaceExpression);
-    audio.current = new Audio("data:audio/mp3;base64," + audioData[animationState.currentSpeechIndex][animationState.currentDialogIndex].audio);
+    avatarFaceExpression.current = animationState.currentDialogs[animationState.currentDialogIndex].faceExpression;
+    audio.current = new Audio("data:audio/mp3;base64," + currentAudioData[currentSceneIndex][animationState.currentSpeechIndex][animationState.currentDialogIndex].audio);
+    if(videoState === "Playing"){
+    setCurrentFaceExpression(avatarFaceExpression.current);
     audio.current.play();
+    }
     audio.current.onended = next;
-    setLipsync(audioData[animationState.currentSpeechIndex][animationState.currentDialogIndex].lipsync);
+    setLipsync(currentAudioData[currentSceneIndex][animationState.currentSpeechIndex][animationState.currentDialogIndex].lipsync);
   },[animationState]);
 
 
   useEffect(() => {
+
+    avatarRef.current.castShadow = true;
+    avatarRef.current.receiveShadow = true;
+    mixer.timeScale = 0.8;
+
     //pose logic 
     if(isSitting){
       pose['Sitting'].play();
@@ -289,7 +305,7 @@ export function Avatar(props) {
         setTimeout(() => {
           setBlink(false);
           nextBlink();
-        }, 300);
+        }, 600);
       }, THREE.MathUtils.randInt(1000, 5000));
     };
     nextBlink();
@@ -298,7 +314,7 @@ export function Avatar(props) {
 
 
   return (
-    <group {...prop} dispose={null}  ref={avatarRef}>
+    <group {...prop} visible={avatarVisibility} scale={0.8} dispose={null}  ref={avatarRef}>
       <group rotation-x={0}>
       <primitive object={nodes.Hips} />
       <skinnedMesh geometry={nodes.Wolf3D_Hair.geometry} material={materials.Wolf3D_Hair} skeleton={nodes.Wolf3D_Hair.skeleton} />

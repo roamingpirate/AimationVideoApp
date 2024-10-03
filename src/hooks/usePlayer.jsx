@@ -1,37 +1,101 @@
 import { Children, createContext, useContext, useEffect, useState } from "react";
-import scriptD from "../data/script.js"
+ import  AnimationScriptData from "../data/japanAnimationScriptData.js"
+// import  AnimationScriptData from "../data/script.js"
 import script from "../data/script.js";
 import { twoSpeakersPodcastProject, oneSpeakerProject } from "../data/projectData.js";
+import storyAudioData from '../data/japanAudioData';
+import podcastAudioData from '../data/storyAudioData'
+
 const PlayerContext = createContext();
 
 export const PlayerController = ({ children }) => {
-  const [script, setScript] = useState();
+
+  const [isLoaded, setIsLoaded] = useState(true);
+  const [animationScript,setAnimationScript] = useState();
+  const [animationType,setAnimationType] = useState(null);
+  const [currentSceneIndex, setCurrentSceneIndex] = useState(null);
+  const [currentSceneScript, setCurrentSceneScript] = useState([]);
+  const [characterLook, setCharacterLook] = useState("Listener");
+  const [currentAudioData, setCurrentAudioData] = useState();
+  const [backgroundImage, setBackgroundImage] = useState("back1");
+  const [previousBackgroundImage, setPreviousBackgroundImage] = useState("back2");
   const [animationState, setAnimationState] = useState();
   const [videoState, setVideoState] = useState("Paused");
-  //const [playerAudio, setPlayerAudio] = useState();
-  //const []
-  const projectData = oneSpeakerProject;
+  const [avatarVisibility, setAvatarVisibility] = useState(true);
+  const [reset, setReset] = useState(false);
 
-  //console.log(projectData);
+  useEffect(() => {
 
-  const getScript = () => {
-    const scriptData = scriptD.Script
-    setScript(scriptData);
+    if(isLoaded){
+        setAnimationType("story")
+        setCurrentSceneIndex(0);
+        setCurrentAudioData(storyAudioData);
+        if(animationType === "story")
+          {
+            // setPreviousBackgroundImage(backgroundImage);
+             setBackgroundImage(AnimationScriptData[currentSceneIndex].backgroud);
+          }
+    }
+
+  },[isLoaded]);
+
+  useEffect(() => {
+    console.log("kel4o");
+
+      if(currentSceneIndex === null)
+      {
+        return ;
+      }
+
+      if(currentSceneIndex === AnimationScriptData.length){
+          setVideoState("Reset");
+          setCurrentSceneIndex(0);
+          return;
+      }
+
+      setCurrentSceneScript(AnimationScriptData[currentSceneIndex].script);
+      updateAnimationState(currentSceneIndex,0,0);
+
+      if(animationType === "story")
+      {
+         setPreviousBackgroundImage(backgroundImage);
+         setBackgroundImage(AnimationScriptData[currentSceneIndex].backgroud);
+      }
+
+  },[currentSceneIndex]);
+
+
+  const updateAnimationState = (currentSceneIndex,currentSpeechIndex,currentDialogIndex) => {
+
+    let currentSceneScriptData = AnimationScriptData[currentSceneIndex].script;
+
     const animationStateObj = {
-      currentSpeechIndex: 0,
-      speechLength: scriptData.length,
-      currentDialogIndex: 0,
-      currentDialogsLength: scriptData[0].Speech.length,
-      currentDialogs: scriptData[0].Speech,
-      currentSpeakers: scriptData[0].Speaker,
-      isplaying: false,
+      currentSpeechIndex: currentSpeechIndex,
+      speechLength: currentSceneScriptData.length,
+      currentDialogIndex: currentDialogIndex,
+      currentDialogsLength: currentSceneScriptData[currentSpeechIndex].speech.length,
+      currentDialogs: currentSceneScriptData[currentSpeechIndex].speech,
+      currentSpeakers: currentSceneScriptData[currentSpeechIndex].speaker,
       currentView: "fullView",
     }
-    console.log(animationStateObj);
+
     setAnimationState(animationStateObj);
   }
 
+  const createSceneTransition = () => {
+    console.log("Popopop")
+    setAvatarVisibility(false);
+    setPreviousBackgroundImage(backgroundImage);
+    setBackgroundImage(AnimationScriptData[(currentSceneIndex+1)%AnimationScriptData.length].backgroud);
+    setTimeout(() => {
+      setAvatarVisibility(true);
+      setCurrentSceneIndex(currentSceneIndex+1);
+    }, 3000);  
+    
+  }
+
   const next = () => {
+
     console.log("kello")
     console.log(animationState);
     var nextDialogIndex = animationState.currentDialogIndex + 1;
@@ -39,7 +103,6 @@ export const PlayerController = ({ children }) => {
     var nextDialogs = animationState.currentDialogs;
     var nextDialogLength = animationState.currentDialogs.length;
     var nextSpeaker = animationState.currentSpeakers;
-    var isPlayingV = animationState.isplaying;
     var nextCurrentView  = animationState.currentView;
 
     if(animationState.currentSpeechIndex === animationState.speechLength)
@@ -51,11 +114,18 @@ export const PlayerController = ({ children }) => {
     if(animationState.currentDialogIndex === (animationState.currentDialogsLength-1))
     {
         nextSpeechIndex = (animationState.currentSpeechIndex+1)%animationState.speechLength;
-        nextDialogs = script[nextSpeechIndex].Speech;
+        if(nextSpeechIndex === 0)
+        {
+           createSceneTransition();
+           //setCurrentSceneIndex(currentSceneIndex + 1);
+           return;
+        }
+        nextDialogs = currentSceneScript[nextSpeechIndex].speech;
         nextDialogLength= nextDialogs.length;
-        nextSpeaker= script[nextSpeechIndex].Speaker;
+        nextSpeaker= currentSceneScript[nextSpeechIndex].speaker;
         nextDialogIndex=0;
-        nextCurrentView= script[nextSpeechIndex].viewType;
+        nextCurrentView= currentSceneScript[nextSpeechIndex].viewType;
+        setCharacterLook(currentSceneScript[nextSpeechIndex].look);
 
     }
     else{
@@ -70,18 +140,9 @@ export const PlayerController = ({ children }) => {
       currentDialogsLength: nextDialogs.length,
       currentSpeechIndex : nextSpeechIndex,
       currentSpeakers : nextSpeaker,
-      isplaying : isPlayingV,
       currentView: nextCurrentView
     }))
   }
-
-
-
-  useEffect(() => {
-    getScript();
-    
-  },[]);
-
 
 
   return (
@@ -91,10 +152,17 @@ export const PlayerController = ({ children }) => {
         animationState,
         setAnimationState,
         next,
-        projectData,
         videoState,
         setVideoState,
-        getScript
+        setCurrentSceneIndex,
+        currentSceneIndex,
+        currentAudioData,
+        backgroundImage,
+        previousBackgroundImage,
+        characterLook,
+        setCurrentSceneScript,
+        updateAnimationState,
+        avatarVisibility,
       }}
     >
       {children}

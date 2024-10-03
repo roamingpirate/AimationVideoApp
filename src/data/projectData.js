@@ -4,10 +4,10 @@ export const twoSpeakersPodcastProject = {
   sceneType: "couchPodcast",
   speakers: [
     {
-      name: "Ankit",
+      name: "Jordan",
     },
     {
-      name: "Anshika",
+      name: "Michael",
     },
   ],
 };
